@@ -1,25 +1,30 @@
 import os
 import hashlib
 import json
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from dataclasses import dataclass, asdict
+from typing import Optional, List, Dict, Any
 
-class UnstructuredDocumentFact(BaseModel):
+@dataclass
+class UnstructuredDocumentFact:
     """Strongly typed facts extracted from unstructured documents (PDF/PNG)."""
-    document_id: str = Field(description="Evidence file ID, e.g. evidence_58")
-    file_path: str = Field(description="Relative path of file in dataset")
-    document_sha256: str = Field(description="SHA-256 checksum of source media")
-    subject_user_id: Optional[str] = Field(None, description="Direct user_id if visible")
-    subject_email: Optional[str] = Field(None, description="Direct email if visible")
-    subject_phone: Optional[str] = Field(None, description="Direct phone if visible")
-    resource_id: str = Field(description="Canonical resource identifier, e.g., account_001, support_001")
-    system_id: str = Field(description="Subsystem name: account_service, support_platform, etc.")
-    captured_at: str = Field(description="Capture timestamp in ISO-8601 UTC")
-    observed_state: str = Field(description="PRESENT, ABSENT, REDACTED, ANONYMIZED, ACTIVE, BLOCKED")
-    contains_unredacted_pii: bool = Field(description="True if personal data is still exposed")
-    user_claims_override: bool = Field(default=False, description="True if text claims an exception/override")
-    extraction_confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
-    needs_escalation: bool = Field(default=False, description="True if contradictory or ambiguous")
+    document_id: str
+    file_path: str
+    document_sha256: str
+    resource_id: str
+    system_id: str
+    captured_at: str
+    observed_state: str  # PRESENT, ABSENT, REDACTED, ANONYMIZED, ACTIVE, BLOCKED
+    contains_unredacted_pii: bool
+    subject_user_id: Optional[str] = None
+    subject_email: Optional[str] = None
+    subject_phone: Optional[str] = None
+    user_claims_override: bool = False
+    extraction_confidence: float = 1.0
+    needs_escalation: bool = False
+
+    def model_dump(self) -> Dict[str, Any]:
+        """Compatibility helper matching dict serialization."""
+        return asdict(self)
 
 def get_file_sha256(filepath: str) -> str:
     h = hashlib.sha256()

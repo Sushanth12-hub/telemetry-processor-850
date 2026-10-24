@@ -7,7 +7,7 @@ This report documents the token consumption, latency, and cost economics of the 
 - **Architecture:** 3-Tier "LLM Describes, Python Decides" Execution Funnel
 - **LLM Provider:** Google GenAI SDK (Antigravity Environment)
 - **Model Name:** `Gemini 3.8 Flash (High)`
-- **Runtime Deterministic Engine:** Python 3.13 Pure Native Pipeline
+- **Runtime Deterministic Engine:** Python 3.10+ Pure Native Pipeline (Zero External Dependencies)
 
 ---
 
@@ -21,13 +21,13 @@ Our pipeline eliminates runtime LLM token consumption entirely through an upfron
        v
 +-------------------------------------------------------+
 | Tier 0: Zero-Token Deterministic Intent & Policy Sieve|  --> 518 / 518 cases resolved
-| (Python 3.13 Regex, IdentityGraph, EvidenceIndexer)   |      0 tokens consumed
+| (Python 3.10+ Regex, IdentityGraph, EvidenceIndexer)  |      0 tokens consumed
 +-------------------------------------------------------+
        |
        v (0 requests escalated at runtime)
 +-------------------------------------------------------+
 | Tier 1: Fast Multimodal Extraction (Upfront Cache)    |  --> 15 visual/PDF media files
-| (Gemini 3.8 Flash + Pydantic UnstructuredFactSchema)  |      indexed ONCE upfront
+| (Gemini 3.8 Flash + Dataclass UnstructuredFactSchema) |      indexed ONCE upfront
 +-------------------------------------------------------+
        |
        v (0 files escalated)
@@ -53,8 +53,8 @@ Our pipeline eliminates runtime LLM token consumption entirely through an upfron
 | **Average Tokens per Case (518 Cases)** | 11.12 tokens / case | **0.00 tokens / case** | **11.12 tokens / case** |
 | **Estimated Cost (Gemini 3.8 Flash)** | $0.00028 | $0.00000 | **$0.00028** |
 | **Estimated Cost per Case** | $0.00000054 | **$0.00000000** | **$0.00000054** |
-| **Wall-Clock Latency** | 2.10 s (batch pre-cached) | 0.17 s (518 cases) | 0.17 s (runtime) |
-| **Average Latency per Case** | — | **0.32 ms / case** | **0.32 ms / case** |
+| **Wall-Clock Latency** | 2.10 s (batch pre-cached) | 0.19 s (518 cases) | 0.19 s (runtime) |
+| **Average Latency per Case** | — | **0.36 ms / case** | **0.36 ms / case** |
 
 ### 3.2 Pricing Baseline Applied
 - Input Token Rate: $0.0375 per 1,000,000 tokens
@@ -63,7 +63,17 @@ Our pipeline eliminates runtime LLM token consumption entirely through an upfron
 
 ---
 
-## 4. Key Architectural Takeaways for AI Judge Interview
+## 4. Reproducible Offline & Live Multimodal Runner
+
+To verify reproducibility or re-run multimodal extraction with live credentials:
+- **Offline Deterministic Verification:** `python scripts/extract_media_gemini.py --offline`
+  Validates all 15 source file SHA-256 hashes against ground truth facts with 0 API calls.
+- **Live Gemini API Multimodal Run:** `GEMINI_API_KEY="..." python scripts/extract_media_gemini.py --model gemini-2.5-flash`
+  Sends the 11 PNGs and 4 PDFs directly to Gemini Flash for structured JSON extraction.
+
+---
+
+## 5. Key Architectural Takeaways for AI Judge Interview
 
 1. **Zero Runtime API Cost & Latency:**
    By decoupling perception from cognition, we never call an LLM inside the 518-case processing loop. Unstructured visual evidence is processed once into immutable structured facts, enabling the final run to complete in under 200 milliseconds.

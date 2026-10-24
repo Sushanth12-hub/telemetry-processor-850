@@ -1,0 +1,8 @@
+# HackerRank Orchestrate: Ghost Data Still Exists
+# Production Runtime Dependencies
+
+# Core pipeline runs with 0 external dependencies on standard Python 3.10+:
+# Uses standard library only: dataclasses, json, sqlite3, csv, hashlib, re, datetime, typing
+
+# Optional: Google Gemini API SDK for live multimodal extraction (scripts/extract_media_gemini.py)
+google-genai>=2.0.0

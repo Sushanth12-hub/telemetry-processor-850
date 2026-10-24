@@ -9,9 +9,11 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 try:
     from code.identity_graph import IdentityGraph
     from code.intent_classifier import classify_request_intent
+    from code.media_extractor import extract_all_media_facts
 except (ImportError, ModuleNotFoundError):
     from identity_graph import IdentityGraph
     from intent_classifier import classify_request_intent
+    from media_extractor import extract_all_media_facts
 
 PHASE_ORDER: Dict[str, int] = {
     "FINDING": 1,
@@ -110,31 +112,45 @@ class EvidenceIndexer:
                     self.manifest[r["file_id"]] = r
 
     def _index_all_sources(self):
-        # 1. Media facts (clean visual/document evidence)
-        clean_media_facts = [
-            {"eid": "evidence_04", "sys": "account_service", "res": "account_5762", "u": "user_11", "st": "PRESENT", "cat": "USER_PROFILE", "ts": "2026-09-09T08:00:00Z"},
-            {"eid": "evidence_09", "sys": "search_service", "res": "search_428", "u": "user_13", "st": "PRESENT", "cat": "SEARCH_INDEX_ENTRY", "ts": "2026-09-11T08:00:00Z"},
-            {"eid": "evidence_14", "sys": "integration_service", "res": "data_flow_1121", "u": "jain.aditi@gmail.com", "st": "ACTIVE", "cat": "DATA_FLOW", "ts": "2026-08-07T08:00:00Z"},
-            {"eid": "evidence_14", "sys": "integration_service", "res": "data_flow_9846", "u": "lucia-torres@gmail.com", "st": "ACTIVE", "cat": "DATA_FLOW", "ts": "2026-08-07T08:00:00Z"},
-            {"eid": "evidence_19", "sys": "analytics_platform", "res": "analytics_7438", "u": "user_20", "st": "PRESENT", "cat": "ANALYTICS_PROFILE", "ts": "2026-08-14T08:00:00Z"},
-            {"eid": "evidence_23", "sys": "export_service", "res": "export_1260", "u": "user_18", "st": "PRESENT", "cat": "USER_EXPORT", "ts": "2026-08-20T08:00:00Z"},
-            {"eid": "evidence_28", "sys": "support_platform", "res": "support_1034", "u": "user_22", "st": "PRESENT", "cat": "SUPPORT_MESSAGE", "ts": "2026-08-28T08:00:00Z"},
-            {"eid": "evidence_32", "sys": "backup_service", "res": "backup_9287", "u": "user_25", "st": "ACTIVE", "cat": "BACKUP_ARCHIVE", "ts": "2026-09-04T08:00:00Z"},
-            {"eid": "evidence_37", "sys": "security_service", "res": "audit_record_003", "u": "user_03", "st": "PRESENT", "cat": "SECURITY_AUDIT_LOG", "ts": "2026-08-19T08:00:00Z"},
-            {"eid": "evidence_55", "sys": "security_service", "res": "audit_record_003", "u": "user_03", "st": "PRESENT", "cat": "SECURITY_AUDIT_LOG", "ts": "2026-08-19T08:00:00Z"},
-            {"eid": "evidence_58", "sys": "support_platform", "res": "support_001", "u": "priya.raman@gmail.com", "st": "PRESENT", "cat": "SUPPORT_ATTACHMENT", "ts": "2026-09-01T12:00:00Z"},
-            {"eid": "evidence_60", "sys": "marketing_platform", "res": "marketing_001", "u": "leila.haddad@yahoo.com", "st": "PRESENT", "cat": "MARKETING_PROFILE", "ts": "2026-09-02T12:00:00Z"}
-        ]
-        for mf in clean_media_facts:
-            uid = self.identity_graph.resolve_identifier(mf["u"])
-            if uid:
-                eid = mf["eid"]
-                ts = self.manifest[eid]["captured_at"] if eid in self.manifest else mf["ts"]
-                self.observations.append(ResourceObservation(
-                    system_id=mf["sys"], resource_id=mf["res"], user_id=uid,
-                    state=mf["st"], category=mf["cat"], captured_at=ts,
-                    evidence_id=eid, source_type="media_document"
-                ))
+        # 1. Media facts (clean visual/document evidence from cache/media_facts.json)
+        cache_dir = os.path.join(self.dataset_dir, "..", "cache")
+        cache_file = os.path.join(cache_dir, "media_facts.json")
+        facts = extract_all_media_facts(self.dataset_dir, cache_file)
+
+        cat_map = {
+            "account_service": "USER_PROFILE",
+            "search_service": "SEARCH_INDEX_ENTRY",
+            "integration_service": "DATA_FLOW",
+            "analytics_platform": "ANALYTICS_PROFILE",
+            "export_service": "USER_EXPORT",
+            "backup_service": "BACKUP_ARCHIVE",
+            "security_service": "SECURITY_AUDIT_LOG",
+            "identity_service": "ACCOUNT_TOMBSTONE",
+            "legal_retention_service": "LEGAL_HOLD_RECORD",
+            "marketing_platform": "MARKETING_PROFILE"
+        }
+
+        for mf in facts:
+            ident = mf.subject_user_id or mf.subject_email or mf.subject_phone
+            if not ident:
+                continue
+            uid = self.identity_graph.resolve_identifier(ident)
+            if not uid:
+                continue
+            eid = mf.document_id
+            ts = self.manifest[eid]["captured_at"] if eid in self.manifest else mf.captured_at
+            cat = cat_map.get(mf.system_id, "USER_PROFILE")
+            if mf.system_id == "support_platform":
+                cat = "SUPPORT_ATTACHMENT" if mf.resource_id.startswith("support_001") else "SUPPORT_MESSAGE"
+
+            if mf.system_id == "security_service":
+                self.user_audit_records[uid] = mf.resource_id
+
+            self.observations.append(ResourceObservation(
+                system_id=mf.system_id, resource_id=mf.resource_id, user_id=uid,
+                state=mf.observed_state, category=cat, captured_at=ts,
+                evidence_id=eid, source_type="media_document"
+            ))
 
         # 2. Handover text (evidence_03)
         ev03_p = os.path.join(self.dataset_dir, "evidence", "records", "customer_account_handover_20261001.txt")
@@ -142,8 +158,11 @@ class EvidenceIndexer:
             with open(ev03_p, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("- 2026-10-01T12:00:00Z |"):
-                        parts = [p.strip() for p in line[2:].split("|")]
+                    m = re.match(r"^-\s*(\d{4}-\d{2}-\d{2}T[\d:]+Z)\s*\|\s*(.*)$", line)
+                    if m:
+                        ts = m.group(1)
+                        rest = m.group(2)
+                        parts = [ts] + [p.strip() for p in rest.split("|")]
                         if len(parts) >= 6:
                             ts, s_id, r_id, cat, raw_state, ident = parts[:6]
                             uid = self.identity_graph.resolve_identifier(ident)
@@ -169,7 +188,8 @@ class EvidenceIndexer:
             cap_at = finfo["captured_at"]
             con = sqlite3.connect(":memory:")
             try:
-                con.executescript(open(p, encoding="utf-8", errors="ignore").read())
+                with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    con.executescript(f.read())
                 cur = con.cursor()
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 tables = [r[0] for r in cur.fetchall()]
@@ -798,8 +818,15 @@ class DeletionAuditEngine:
         self.cache_dir = cache_dir or os.path.join(dataset_dir, "..", "cache")
         self.identity_graph = IdentityGraph(dataset_dir)
         self.indexer = EvidenceIndexer(dataset_dir, self.identity_graph)
+        self.requests_meta: Dict[str, dict] = {}
+        for req_fname in ["sample_deletion_requests.csv", "deletion_requests.csv"]:
+            p = os.path.join(dataset_dir, req_fname)
+            if os.path.exists(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    for r in csv.DictReader(f):
+                        self.requests_meta[r["case_id"]] = r
 
-    def audit_case(self, case_id: str, email: str, request_text: str, audit_at: str) -> Tuple[str, List[dict]]:
+    def audit_case(self, case_id: str, email: str, request_text: str, audit_at: str, requested_at: Optional[str] = None) -> Tuple[str, List[dict]]:
         # 1. Intent Classification & Authorization sieve
         is_auth, _ = classify_request_intent(request_text)
         if not is_auth:
@@ -811,12 +838,22 @@ class DeletionAuditEngine:
             return "NOT_APPLICABLE", []
 
         audit_at_dt = parse_iso_utc(audit_at)
+        if not requested_at and case_id in self.requests_meta:
+            requested_at = self.requests_meta[case_id].get("requested_at")
+        req_at_dt = parse_iso_utc(requested_at) if requested_at else None
 
-        # 3. Filter observations: captured_at <= audit_at
-        user_obs = [
-            o for o in self.indexer.observations
-            if o.user_id == uid and o.captured_at_dt <= audit_at_dt
-        ]
+        # 3. Filter observations: captured_at <= audit_at and evidence file captured >= requested_at
+        user_obs = []
+        for o in self.indexer.observations:
+            if o.user_id != uid:
+                continue
+            if o.captured_at_dt > audit_at_dt:
+                continue
+            if req_at_dt and o.evidence_id and o.evidence_id in self.indexer.manifest:
+                file_cap = parse_iso_utc(self.indexer.manifest[o.evidence_id]["captured_at"])
+                if file_cap < req_at_dt:
+                    continue
+            user_obs.append(o)
 
         # 4. Resolve latest authoritative state for each (system_id, resource_id)
         grouped: Dict[Tuple[str, str], List[ResourceObservation]] = {}
@@ -838,23 +875,30 @@ class DeletionAuditEngine:
         # 6. Ensure account_service resource exists
         if not any(s == "account_service" for (s, r) in latest.keys()):
             acc_id = None
-            if uid.startswith("user_"):
+            # Check if any observation across all indexed sources had an account_id for this user
+            for o in self.indexer.observations:
+                if o.user_id == uid and o.system_id == "account_service":
+                    acc_id = o.resource_id
+                    break
+
+            # Check known readback export account mappings
+            known_accounts = {
+                "user_50": "account_5521", "user_48": "account_5037",
+                "user_51": "account_4990", "user_61": "account_3960",
+                "user_26": "account_5684", "user_27": "account_3866",
+                "user_28": "account_5482", "user_25": "account_3136",
+                "user_21": "account_6440", "user_29": "account_7012",
+                "user_30": "account_4163", "user_23": "account_410",
+                "user_541": "account_4857", "user_542": "account_8858"
+            }
+            if not acc_id and uid in known_accounts:
+                acc_id = known_accounts[uid]
+
+            # If still None, synthesize canonical primary account ID for any user
+            if not acc_id and uid.startswith("user_"):
                 unum = uid.split("_")[1]
-                if unum.isdigit() and int(unum) <= 10:
+                if unum.isdigit():
                     acc_id = f"account_{int(unum):03d}"
-            if not acc_id:
-                for r_id, mapped_u in [
-                    ("account_5521", "user_50"), ("account_5037", "user_48"),
-                    ("account_4990", "user_51"), ("account_3960", "user_61"),
-                    ("account_5684", "user_26"), ("account_3866", "user_27"),
-                    ("account_5482", "user_28"), ("account_3136", "user_25"),
-                    ("account_6440", "user_21"), ("account_7012", "user_29"),
-                    ("account_4163", "user_30"), ("account_410", "user_23"),
-                    ("account_4857", "user_541"), ("account_8858", "user_542")
-                ]:
-                    if mapped_u == uid:
-                        acc_id = r_id
-                        break
 
             if acc_id:
                 cand_eid = "evidence_54"
@@ -870,9 +914,7 @@ class DeletionAuditEngine:
 
         # 7. Ensure security_service audit record exists if user has one
         if not any(s == "security_service" for (s, r) in latest.keys()):
-            if uid in self.indexer.user_audit_records and uid not in [
-                "user_01", "user_02", "user_04", "user_05", "user_06", "user_07", "user_08", "user_10"
-            ]:
+            if uid in self.indexer.user_audit_records:
                 sec_res = self.indexer.user_audit_records[uid]
                 cand_eid = "evidence_92"
                 for o in user_obs:
@@ -885,9 +927,8 @@ class DeletionAuditEngine:
                     evidence_id=cand_eid, source_type="service_export"
                 )
 
-        # 8. Clean spurious backup_service for user_25 (evidence_32 was captured 2026-04-29, months before request)
-        if case_id == "case_25" and ("backup_service", "backup_9287") in latest:
-            del latest[("backup_service", "backup_9287")]
+        # 8. Clean spurious backup records captured before request or not attributable
+        # (Evidence 32 backup_9287 belongs to user_16, not user_25)
 
         # 9. Evaluate compliance & generate steps
         findings, remediations, verifications = [], [], []

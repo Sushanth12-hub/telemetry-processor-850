@@ -58,7 +58,8 @@ def run_pipeline(dataset_dir: str, requests_file: str, output_file: str):
             case_id=cid,
             email=email,
             request_text=req_text,
-            audit_at=audit_at
+            audit_at=audit_at,
+            requested_at=req.get("requested_at")
         )
 
         steps_str = json.dumps(steps, separators=(",", ":"))
