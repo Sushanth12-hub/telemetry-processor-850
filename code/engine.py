@@ -808,6 +808,56 @@ class EvidenceIndexer:
         self.user_audit_records["user_50"] = "audit_record_6645"
         self.user_audit_records["user_48"] = "audit_record_5569"
 
+        # 7. System Activity & Data Catalog Ingestion (Failure Mode 5 Remediation)
+        act_file = os.path.join(self.dataset_dir, "system_activity.csv")
+        if os.path.exists(act_file):
+            with open(act_file, "r", encoding="utf-8") as f:
+                act_rows = list(csv.DictReader(f))
+
+            # Pass 1: Catalog linkages (activity_4000 to activity_4011)
+            catalog_resource_users: Dict[str, str] = {}
+            for r in act_rows:
+                if r.get("event_type") == "LINK_RESOURCE_IDENTITY":
+                    details = r.get("details", "")
+                    m_u = re.search(r'user_\d+', details)
+                    m_e = re.search(r'[\w\.-]+@[\w\.-]+', details)
+                    uid = None
+                    if m_u:
+                        uid = self.identity_graph.resolve_identifier(m_u.group(0))
+                    if not uid and m_e:
+                        uid = self.identity_graph.resolve_identifier(m_e.group(0))
+                    res_id = r.get("resource_id")
+                    if uid and res_id:
+                        catalog_resource_users[res_id] = uid
+                        tgt_sys = r.get("target_system", "")
+                        if tgt_sys == "security_service":
+                            self.user_audit_records[uid] = res_id
+
+            # Apply catalog linkages to any previously unmapped observations
+            for o in self.observations:
+                if not o.user_id and o.resource_id in catalog_resource_users:
+                    o.user_id = catalog_resource_users[o.resource_id]
+
+            # Pass 2: Operational lifecycle events (RESTORE_BACKUP repopulations)
+            for r in act_rows:
+                ev_type = r.get("event_type")
+                if ev_type == "RESTORE_BACKUP" and r.get("reported_result") == "SUCCESS":
+                    details = r.get("details", "")
+                    m_down = re.search(r'(search_\d+|account_\d+|analytics_\d+|export_\d+|support_\d+|data_flow_\d+)', details)
+                    if m_down:
+                        down_res = m_down.group(1)
+                        b_res = r.get("resource_id")
+                        b_uid = catalog_resource_users.get(b_res)
+                        if b_uid:
+                            down_sys = "search_service" if down_res.startswith("search_") else r.get("target_system", "search_service")
+                            down_cat = "SEARCH_INDEX_ENTRY" if down_sys == "search_service" else "USER_PROFILE"
+                            ev_time = r.get("event_time", "")
+                            self.observations.append(ResourceObservation(
+                                system_id=down_sys, resource_id=down_res, user_id=b_uid,
+                                state="PRESENT", category=down_cat, captured_at=ev_time,
+                                evidence_id=r.get("activity_id", "system_activity"), source_type="system_activity_restore"
+                            ))
+
 class DeletionAuditEngine:
     """
     Deterministic Decision Engine ('LLM Describes, Python Decides').
