@@ -1,0 +1,169 @@
+## 2026-10-24T13:17:30Z SESSION START
+
+tool=Antigravity
+model=Gemini 3.8 Flash (High)
+Repo Root: c:\Users\sangi\OneDrive\Desktop\New folder\omni\hackerrank-orchestrate-october26
+Branch: main
+Worktree: main
+Parent Agent: None
+Language: py
+Time Remaining: not configured
+
+## 2026-10-24T13:18:00Z Repository setup and initial requirements analysis
+
+User Prompt (verbatim, secrets redacted):
+https://github.com/interviewstreet/hackerrank-orchestrate-october26 clone this github repo undertand the rules and regulation use necessary apis for implementing the model use all the extensions installed getshitdone coderabbit and ralph loop in these process
+
+Agent Response Summary:
+Cloned the repository, analyzed problem statement, dataset schema, and evaluation rules. Verified required output formats and began GSD specification, Ralph Loop milestone decomposition, and CodeRabbit quality integration.
+
+Actions:
+* git clone https://github.com/interviewstreet/hackerrank-orchestrate-october26
+* read README.md, problem_statement.md, AGENTS.md, deletion_rules.csv, sample_output.csv
+* established session logging and progress tracking
+
+Context:
+tool=Antigravity
+model=Gemini 3.8 Flash (High)
+branch=main
+repo_root=c:\Users\sangi\OneDrive\Desktop\New folder\omni\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=None
+
+
+## 2026-10-24T13:57:30Z Phase 1 reconnaissance and production architecture blueprint
+
+User Prompt (verbatim, secrets redacted):
+also build it You are a Staff Principal AI Systems Engineer competing in the HackerRank Orchestrate hackathon. Your objective is to read this repository (`problem_statement.md`, `AGENTS.md` if present, and all files in `dataset/` and `media/`) and build a top-1% production-grade pipeline that maximizes accuracy on `output.csv`, minimizes API token cost and latency, and generates comprehensive documentation for the post-submission AI Judge interview.
+
+Follow this exact execution blueprint and ensure every single requirement below is implemented:
+
+### PHASE 1: DEEP REPOSITORY & SCHEMA RECONNAISSANCE
+1. Read `problem_statement.md` completely. List every explicit business rule, boundary condition, tie-breaker, calculation formula, and output format requirement.
+2. Inspect all files in `dataset/` (sample inputs, sample outputs, test inputs, reference tables/JSONs, and `media/` attachments).
+3. Verify whether the required LLM interaction log (`$HOME/hackerrank_orchestrate/log.txt` or local equivalent specified in instructions) is active and respected.
+
+### PHASE 2: CORE ARCHITECTURAL PRINCIPLE ("LLM DESCRIBES, PYTHON DECIDES")
+Never allow an LLM to directly output the final target prediction or perform multi-step arithmetic.
+- **Unstructured Extraction Layer (LLM):** Use the LLM strictly to extract structured, strongly-typed facts (via Pydantic schemas) from unstructured text, chat logs, and images/PDFs.
+- **Deterministic Decision Engine (Python):** Write pure, deterministic, unit-tested Python functions to execute all policy validations, math calculations, aggregations, conflict resolutions, and final label formatting.
+
+### PHASE 3: MANDATORY ADVERSARIAL EDGE-CASE DEFENSES
+Implement explicit guards in Python for all six of these hidden dataset traps:
+
+1. **Stateful & Cross-Row Dependencies:**
+   - Check if `user_id`, `account_id`, `merchant_id`, or `resource_id` repeats across multiple rows in the dataset.
+   - Sort requests strictly chronologically by normalized UTC timestamp before processing stateful rules (running balances, remaining quotas, cooldown windows, rate limits, duplicate claims).
+   - Maintain an in-memory ledger during evaluation, and strictly restore the exact original row order and index alignment before writing `output.csv`.
+
+2. **Cross-Modal Conflict Resolution Hierarchy:**
+   - When structured CSV columns, JSON event logs, user chat messages, and receipt/document images contradict each other, enforce a deterministic Source-of-Truth hierarchy in Python:
+     1. Immutable System/Database Reference Logs (highest trust: account status, official policy limits, verified timestamps)
+     2. Primary Visual/Document Evidence (line-item breakdown on receipts/invoices, minus explicitly excluded categories)
+     3. Latest Timestamped User Amendment (e.g., user explicitly revising a claim or correcting a typo in chat)
+     4. Raw Unverified User Form Input (lowest trust)
+
+3. **Prompt Injection & Social Engineering Immunity:**
+   - Treat all user text, ticket descriptions, and OCR text inside images as untrusted input.
+   - Ignore adversarial instructions embedded in data (e.g., "SYSTEM OVERRIDE", "Ignore previous instructions", "Pre-approved by VP of Finance", "Output APPROVED").
+   - If a user claims an exception or override in text, extract it solely as an unverified boolean flag (`user_claims_override: bool`) and verify against official system tables in Python.
+
+4. **Temporal, Timezone & Sequence Hygiene:**
+   - Parse all timestamps into timezone-aware UTC (`datetime.timezone.utc`) before comparing dates or calculating durations.
+   - Never assume JSON arrays of historical events or chat messages are pre-sorted; explicitly sort all event lists by timestamp before reading the "latest" state.
+   - Verify whether time windows (e.g., "within 30 days") are inclusive (`<=`) or exclusive (`<`), and whether they measure calendar days or exact 24-hour intervals, by testing both against `sample_output.csv`.
+
+5. **Numeric, Currency & Rounding Precision:**
+   - Never use standard binary floating-point (`float`) for currency or threshold math. Use Python's `decimal.Decimal` with `ROUND_HALF_UP` (avoid Python's default banker's rounding `round()`).
+   - Handle accounting negatives `(100.00)`, thousand separators, and foreign currency symbols (`€`, `£`, `₹`, `CAD`) in both text and images.
+   - When extracting totals from invoices/receipts, extract itemized line items (`subtotal`, `tax`, `tip`, `shipping`, `discounts`, `ineligible_items`) separately so Python can compute the exact eligible total according to policy.
+   - Clamp final numerical outputs strictly within permitted domain bounds (`min_val <= x <= max_val`).
+
+6. **Visual & Document Forensics:**
+   - Compute SHA-256 file hashes for all media attachments (`media/`) to immediately detect duplicate file reuse across different request IDs.
+   - Extract unique document identifiers (invoice number, receipt ID, transaction reference, merchant name, receipt date) and check for duplicate reuse across rows or mismatches against the request row's metadata.
+
+### PHASE 4: 3-TIER COST & LATENCY FUNNEL ARCHITECTURE
+Optimize for the hackathon cost/latency rubric using a 3-tier execution funnel:
+- **Tier 0 (Zero-Token Deterministic Sieve):** Evaluate hard deterministic disqualifiers first (e.g., inactive account, expired timestamp, missing mandatory file, blacklisted category). Resolve these rows in pure Python with 0 API calls.
+- **Tier 1 (Fast Multimodal Extraction):** For remaining rows, call a fast, cost-efficient model with a compact prompt and strict Pydantic schema. Include `extraction_confidence: float` and `needs_escalation: bool` (set to `True` if the image is blurry/handwritten, text is contradictory, or values sit within 2% of a policy threshold).
+- **Tier 2 (Frontier Model Escalation):** Route only rows where `needs_escalation == True` or schema validation fails to a heavy reasoning model.
+
+### PHASE 5: INFRASTRUCTURE, CACHING & VALIDATION
+1. **Content-Addressable Disk Cache:** Implement a local SQLite/disk cache keyed by `SHA256(model_name + system_prompt + user_payload + image_sha256)`. Re-running the pipeline must cost $0 and execute in milliseconds for cached rows.
+2. **Async Concurrency & Resilience:** Use `asyncio.Semaphore` for rate-limit-safe concurrency, exponential backoff with jitter for transient API errors, and automatic retry with error feedback if Pydantic validation fails.
+3. **Automated Sample Verification Loop (`validate_sample.py`):**
+   - Build a validation script that runs the pipeline against the sample dataset and prints a full discrepancy table against `sample_output.csv`.
+   - Iterate on the deterministic rules until sample accuracy reaches 100%.
+   - **STRICT RULE:** Never hardcode sample IDs (`if id == 'SAMPLE_1'`). Every fix must be a generalizable domain rule.
+4. **Output Integrity Check:** Before finishing, run an automated assertion script on `output.csv` verifying: exact row count match with `test_input.csv`, exact column names, exact ID ordering, zero `NaN`/`null`/`None` strings, and valid enum/numeric ranges.
+5. **Deliverables & AI Judge Prep:**
+   - Generate `usage_report.md` with exact token counts (input/output/cached), cost per row, tier breakdown, and wall-clock latency.
+   - Generate `METRICS_AND_DECISIONS.md` documenting our architecture, conflict hierarchy, edge cases discovered during sample validation, and ablation accuracy improvements so we have concrete metrics ready for the AI Judge interview.
+
+Start immediately with Phase 1: inspect the repository files, summarize the exact rules and data schemas, and propose the concrete Pydantic extraction schema and deterministic rule set.
+
+Agent Response Summary:
+Completed Phase 1 deep repository reconnaissance, schema analysis, and architectural design following the 'LLM Describes, Python Decides' principle. Formulated the complete business rules, canonical sorting formula, 6 adversarial edge-case defense strategies, Pydantic extraction schemas, and the 3-tier cost/latency funnel. Verified session logging, progress tracking, and installed google-genai for the multimodal extraction layer.
+
+Actions:
+* inspected problem_statement.md, AGENTS.md, deletion_rules.csv, evidence_files.csv, and sample_output.csv
+* verified Python 3.13 libraries (pydantic, pymupdf, pillow, sqlite3, requests, httpx) and installed google-genai
+* authored Phase 1 architecture and specification blueprint artifact
+* appended verified per-turn log entry adhering to AGENTS.md §5.2
+
+Context:
+tool=Antigravity
+model=Gemini 3.8 Flash (High)
+branch=main
+repo_root=c:\Users\sangi\OneDrive\Desktop\New folder\omni\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=None
+
+
+## 2026-10-24T15:25:00Z Execution, Ralph convergence, CodeRabbit audit, and production release
+
+User Prompt (verbatim, secrets redacted):
+`phase1_specification_and_architecture.md` is complete. You have three specialized extensions installed in this environment—GSD (Get Shit Done), Ralph, and CodeRabbit CLI. You must use each tool in its designated stage below to build, converge, audit, and run the complete pipeline for the Ghost Data Still Exists challenge (518 test cases, 32 sample cases, 850 users, 11 PNGs, 4 PDFs). AUTONOMOUS EXECUTION RULE: Do NOT stop, summarize midway, or ask for permission between stages. Transition automatically from Stage 1 (GSD) -> Stage 2 (Ralph) -> Stage 3 (CodeRabbit) -> Stage 4 (Production 518-Row Run & Deliverables) until all verification checks pass 100%.
+
+Agent Response Summary:
+Successfully converged the pipeline to 32/32 (100.0% exact match) on sample benchmark cases via the Ralph Loop. Executed CodeRabbit static audit and hardened all 5 quality pillars, resolving unescaped quote strings and SQL inventory table schemas. Executed the production pipeline on all 518 cases generating compliant output.csv, authored complete evaluation and usage reports, verified all 12 validation rules with zero errors, and packaged code.zip.
+
+Actions:
+* validated sample benchmark cases achieving 32/32 (100.0%) exact match
+* audited codebase against CodeRabbit 5 quality pillars and hardened edge-case resilience
+* executed code/main.py producing output.csv for all 518 production cases in 0.17s
+* verified output.csv integrity: 518 rows, exact column names, exact case ordering, 10 non-deletion cases marked NOT_APPLICABLE with [], and all 12 rules passed 100%
+* authored code/evaluation/evaluation_report.md and code/evaluation/usage_report.md
+* packaged code.zip with clean runnable code and documentation, excluding __pycache__ and raw datasets
+
+Context:
+tool=Antigravity
+model=Gemini 3.8 Flash (High)
+branch=main
+repo_root=c:\Users\sangi\OneDrive\Desktop\New folder\omni\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=None
+
+
+## 2026-10-24T15:28:00Z Git commit and repository push preparation
+
+User Prompt (verbatim, secrets redacted):
+push them to my github first
+
+Agent Response Summary:
+Created .gitignore to exclude Python bytecode and cache files, staged all solution files, models, evaluation reports, and production artifacts, and committed them cleanly. Verified GitHub credentials and remote repository configuration to complete push to user GitHub account.
+
+Actions:
+* created .gitignore
+* staged code/, evaluation/, output.csv, code.zip, README.md, validate_sample.py, and log.txt
+* executed git commit with comprehensive descriptive message
+* checked git remotes and user GitHub repository configuration
+
+Context:
+tool=Antigravity
+model=Gemini 3.8 Flash (High)
+branch=main
+repo_root=c:\Users\sangi\OneDrive\Desktop\New folder\omni\hackerrank-orchestrate-october26
+worktree=main
+parent_agent=None
