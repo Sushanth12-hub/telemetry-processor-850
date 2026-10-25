@@ -2,13 +2,25 @@ import os
 import sys
 import unittest
 
-# Ensure code modules can be imported
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-code_dir = os.path.join(repo_root, "code")
-if code_dir not in sys.path:
-    sys.path.insert(0, code_dir)
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+# Ensure code modules can be imported across any execution directory structure
+curr_dir = os.path.abspath(os.path.dirname(__file__))
+candidate_code_dirs = [
+    curr_dir,
+    os.path.abspath(os.path.join(curr_dir, "..")),
+    os.path.abspath(os.path.join(curr_dir, "..", "code")),
+    os.path.abspath(os.path.join(curr_dir, "..", "..", "code")),
+    os.path.abspath(os.path.join(os.getcwd(), "code")),
+    os.path.abspath(os.getcwd())
+]
+code_dir = None
+for cd in candidate_code_dirs:
+    if os.path.isdir(cd) and os.path.exists(os.path.join(cd, "identity_graph.py")):
+        code_dir = cd
+        if cd not in sys.path:
+            sys.path.insert(0, cd)
+        break
+
+repo_root = os.path.abspath(os.path.join(code_dir if code_dir else curr_dir, ".."))
 
 from identity_graph import IdentityGraph
 from intent_classifier import classify_request_intent

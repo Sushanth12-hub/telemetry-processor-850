@@ -5,10 +5,24 @@ import json
 import unittest
 
 eval_dir = os.path.abspath(os.path.dirname(__file__))
-code_dir = os.path.abspath(os.path.join(eval_dir, ".."))
-repo_root = os.path.abspath(os.path.join(code_dir, ".."))
+candidate_code_dirs = [
+    eval_dir,
+    os.path.abspath(os.path.join(eval_dir, "..")),
+    os.path.abspath(os.path.join(eval_dir, "..", "code")),
+    os.path.abspath(os.path.join(eval_dir, "..", "..", "code")),
+    os.path.abspath(os.path.join(os.getcwd(), "code")),
+    os.path.abspath(os.getcwd())
+]
+code_dir = None
+for cd in candidate_code_dirs:
+    if os.path.isdir(cd) and os.path.exists(os.path.join(cd, "engine.py")):
+        code_dir = cd
+        if cd not in sys.path:
+            sys.path.insert(0, cd)
+        break
 
-for p in [eval_dir, code_dir, repo_root]:
+repo_root = os.path.abspath(os.path.join(code_dir if code_dir else eval_dir, ".."))
+for p in [eval_dir, repo_root]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
